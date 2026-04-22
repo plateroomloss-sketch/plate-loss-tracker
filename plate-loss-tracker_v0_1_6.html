@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plate Loss Tracker</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;background:#F0F4F8;}
+:root{
+  --navy:#0D1B2A;--navy-2:#162436;--navy-3:#1E3248;--navy-4:#2A4560;
+  --c-cyan:#00B4D8;--c-mag:#E5007E;--c-yel:#FFD100;
+  --surface:#FFFFFF;--bg:#F0F4F8;--border:rgba(13,27,42,0.12);--border-md:#D0DAE6;
+  --text-1:#0D1B2A;--text-2:#3A5068;--text-3:#7A96B0;
+  --r:8px;--rl:12px;
+}
+.app{max-width:1100px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
+.topbar{background:var(--navy);display:flex;align-items:center;padding:0;position:sticky;top:0;z-index:100;}
+.topbar-brand{display:flex;align-items:center;gap:10px;padding:14px 20px;border-right:1px solid rgba(255,255,255,0.08);}
+.cmyk-dots{display:flex;gap:4px;}
+.cmyk-dot{width:12px;height:12px;border-radius:50%;}
+.brand-text{font-size:13px;font-weight:700;color:#fff;letter-spacing:.03em;}
+.brand-sub{font-size:10px;color:rgba(255,255,255,.45);margin-top:1px;}
+.topbar-nav{display:flex;flex:1;padding:0 8px;overflow-x:auto;}
+.tnav{background:none;border:none;color:rgba(255,255,255,.55);font-size:12px;font-weight:600;padding:0 14px;height:52px;cursor:pointer;border-bottom:3px solid transparent;letter-spacing:.03em;font-family:inherit;transition:color .15s,border-color .15s;display:flex;align-items:center;gap:5px;white-space:nowrap;}
+.tnav:hover{color:rgba(255,255,255,.85);}
+.tnav.active{color:#fff;border-bottom-color:var(--c-cyan);}
+.topbar-right{display:flex;align-items:center;gap:10px;padding:0 16px;}
+.topbar-version{font-size:10px;color:rgba(255,255,255,.3);font-weight:600;letter-spacing:.05em;white-space:nowrap;}
+.conn-dot{width:8px;height:8px;border-radius:50%;background:#6B7280;}
+.conn-dot.online{background:#10B981;}
+.conn-dot.offline{background:#EF4444;}
+.conn-dot.loading{background:#F59E0B;}
+
+.pages{flex:1;padding:24px;}
+.page{display:none;animation:fadeIn .15s ease;}
+.page.active{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+.page-title{font-size:20px;font-weight:700;color:var(--text-1);margin-bottom:20px;letter-spacing:-.01em;}
+
+/* Loading screen */
+.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;gap:16px;}
+.spinner{width:36px;height:36px;border:3px solid var(--border-md);border-top-color:var(--c-cyan);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-size:14px;color:var(--text-3);font-weight:500;}
+.error-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;gap:12px;text-align:center;padding:24px;}
+.error-icon{font-size:36px;}
+.error-title{font-size:16px;font-weight:700;color:var(--text-1);}
+.error-msg{font-size:13px;color:var(--text-3);max-width:400px;line-height:1.6;}
+.error-url{font-size:11px;font-family:monospace;background:#F0F4F8;padding:6px 12px;border-radius:6px;color:var(--text-2);margin-top:4px;word-break:break-all;}
+
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.stat{background:var(--surface);border-radius:var(--rl);padding:16px 18px;border:1px solid var(--border);position:relative;overflow:hidden;}
+.stat-accent{position:absolute;top:0;left:0;right:0;height:3px;}
+.stat-lbl{font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;}
+.stat-val{font-size:26px;font-weight:800;color:var(--text-1);line-height:1;}
+.stat-val.sm{font-size:14px;font-weight:600;padding-top:4px;line-height:1.3;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:640px){.two-col,.stat-row,.form-grid{grid-template-columns:1fr!important;}}
+.card{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);padding:18px 20px;}
+.card-hdr{display:flex;align-items:center;gap:8px;margin-bottom:16px;}
+.card-hdr-bar{width:3px;height:16px;border-radius:2px;}
+.card-title{font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.05em;text-transform:uppercase;}
+.bar-list{display:flex;flex-direction:column;gap:10px;}
+.bar-item{display:flex;flex-direction:column;gap:4px;}
+.bar-row-lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);}
+.bar-count{font-weight:700;color:var(--text-1);}
+.bar-track{height:7px;border-radius:4px;background:var(--bg);overflow:hidden;}
+.bar-fill{height:100%;border-radius:4px;transition:width .5s ease;}
+.no-data{font-size:13px;color:var(--text-3);text-align:center;padding:24px 0;}
+
+.form-wrap{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);padding:24px;max-width:620px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.fg{display:flex;flex-direction:column;gap:6px;}
+.fg label{font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em;}
+.fg select,.fg input,.fg textarea{padding:9px 12px;border:1.5px solid var(--border-md);border-radius:var(--r);font-size:14px;color:var(--text-1);background:#fff;font-family:inherit;outline:none;transition:border-color .15s,box-shadow .15s;width:100%;}
+.fg select:focus,.fg input:focus,.fg textarea:focus{border-color:var(--c-cyan);box-shadow:0 0 0 3px rgba(0,180,216,.15);}
+.fg textarea{resize:vertical;min-height:72px;}
+.opt{font-size:10px;font-weight:400;color:var(--text-3);text-transform:none;letter-spacing:0;}
+.form-sep{height:1px;background:var(--border);margin:20px 0;}
+.btn-save{background:var(--navy);color:#fff;border:none;padding:10px 24px;border-radius:var(--r);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.02em;transition:background .15s,opacity .15s;}
+.btn-save:hover{background:var(--navy-3);}
+.btn-save:disabled{opacity:.5;cursor:not-allowed;}
+.btn-ghost{background:none;border:1.5px solid var(--border-md);color:var(--text-2);padding:9px 16px;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+.btn-ghost:hover{border-color:var(--navy-4);color:var(--text-1);}
+.feedback{font-size:12px;font-weight:700;color:#059669;}
+.feedback.err{color:#DC2626;}
+
+.shift-grid{display:flex;flex-direction:column;gap:12px;margin-bottom:20px;}
+.shift-card{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:16px 20px;position:relative;}
+.shift-card-accent{position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:var(--rl) 0 0 var(--rl);}
+.shift-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;margin-right:14px;}
+.shift-name{font-size:15px;font-weight:700;color:var(--text-1);}
+.shift-role{font-size:12px;color:var(--text-3);margin-top:2px;}
+.shift-stats{display:flex;gap:28px;}
+.sstat{text-align:right;}
+.sstat-n{font-size:22px;font-weight:800;line-height:1;}
+.sstat-l{font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+
+.log-filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+.log-filters select,.log-filters input{padding:7px 10px;border:1.5px solid var(--border-md);border-radius:var(--r);font-size:12px;color:var(--text-1);background:#fff;font-family:inherit;outline:none;}
+.log-list{display:flex;flex-direction:column;gap:8px;}
+.log-card{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);overflow:hidden;}
+.log-card-top{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:var(--navy);}
+.log-card-top-left{display:flex;align-items:center;gap:10px;}
+.lc-shift{font-size:11px;font-weight:800;padding:3px 9px;border-radius:20px;}
+.lc-emp{font-size:13px;font-weight:600;color:#fff;}
+.lc-date{font-size:11px;color:rgba(255,255,255,.45);font-weight:600;}
+.log-card-body{display:grid;grid-template-columns:2fr 1fr 1fr;padding:12px 16px;gap:12px;}
+.lc-field{display:flex;flex-direction:column;gap:3px;}
+.lc-label{font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;}
+.lc-issue-pill{font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;display:inline-block;}
+.lc-qty{font-size:22px;font-weight:800;}
+.lc-val{font-size:13px;color:var(--text-2);font-weight:500;}
+.log-card-note{padding:8px 16px 12px;font-size:12px;color:var(--text-3);font-style:italic;border-top:1px solid var(--border);}
+.log-card-del{background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:18px;padding:0 4px;line-height:1;}
+.log-card-del:hover{color:#FCA5A5;}
+.log-summary{font-size:12px;color:var(--text-3);font-weight:600;margin-bottom:12px;}
+
+.add-issue-row{display:flex;gap:8px;margin-bottom:16px;}
+.add-issue-row input{flex:1;padding:9px 12px;border:1.5px solid var(--border-md);border-radius:var(--r);font-size:14px;color:var(--text-1);font-family:inherit;outline:none;}
+.add-issue-row input:focus{border-color:var(--c-cyan);box-shadow:0 0 0 3px rgba(0,180,216,.15);}
+.issue-grid{display:flex;flex-direction:column;gap:6px;}
+.issue-row{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);display:flex;align-items:center;justify-content:space-between;padding:10px 14px;}
+.issue-row-left{display:flex;align-items:center;gap:10px;}
+.issue-swatch{width:10px;height:10px;border-radius:50%;}
+.issue-name{font-size:13px;font-weight:600;color:var(--text-1);}
+.btn-del{background:none;border:1.5px solid #FCA5A5;color:#DC2626;font-size:11px;font-weight:700;padding:4px 10px;border-radius:var(--r);cursor:pointer;font-family:inherit;}
+.btn-del:hover{background:#FEF2F2;}
+
+/* PIN */
+.pin-overlay{background:rgba(13,27,42,0.65);border-radius:var(--rl);display:flex;align-items:center;justify-content:center;padding:48px 24px;min-height:340px;}
+.pin-box{background:var(--surface);border-radius:var(--rl);padding:32px 28px;width:100%;max-width:300px;text-align:center;border:1px solid var(--border);}
+.pin-lock{width:40px;height:40px;background:var(--navy);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;}
+.pin-title{font-size:16px;font-weight:700;color:var(--text-1);margin-bottom:4px;}
+.pin-sub{font-size:12px;color:var(--text-3);margin-bottom:20px;}
+.pin-input{width:100%;padding:12px;border:2px solid var(--border-md);border-radius:var(--r);font-size:20px;font-weight:700;text-align:center;letter-spacing:.3em;color:var(--text-1);font-family:inherit;outline:none;transition:border-color .15s;}
+.pin-input:focus{border-color:var(--c-cyan);}
+.pin-btn{width:100%;margin-top:12px;background:var(--navy);color:#fff;border:none;padding:11px;border-radius:var(--r);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.pin-btn:hover{background:var(--navy-3);}
+.pin-error{font-size:12px;color:#DC2626;font-weight:600;margin-top:8px;min-height:18px;}
+
+/* Admin */
+.admin-section{margin-bottom:20px;}
+.admin-section-title{font-size:12px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.pin-user-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:16px 20px;margin-bottom:10px;}
+.pin-user-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.pin-user-name{font-size:14px;font-weight:700;color:var(--text-1);}
+.pin-user-role{font-size:11px;color:var(--text-3);margin-top:2px;}
+.pin-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;}
+.pin-set{background:#DCFCE7;color:#166534;}
+.pin-unset{background:#FEF3C7;color:#92400E;}
+.pin-change-row{display:flex;gap:8px;flex-wrap:wrap;}
+.pin-change-row input{flex:1;min-width:120px;padding:8px 12px;border:1.5px solid var(--border-md);border-radius:var(--r);font-size:14px;font-weight:700;letter-spacing:.15em;color:var(--text-1);font-family:inherit;outline:none;text-align:center;}
+.pin-change-row input:focus{border-color:var(--c-cyan);}
+.btn-set-pin{background:var(--c-cyan);color:#003F4D;border:none;padding:8px 16px;border-radius:var(--r);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn-clear-pin{background:none;border:1.5px solid #FCA5A5;color:#DC2626;font-size:12px;font-weight:700;padding:8px 14px;border-radius:var(--r);cursor:pointer;font-family:inherit;}
+.admin-feedback{font-size:12px;font-weight:700;color:#059669;margin-top:8px;min-height:16px;}
+
+/* Setup banner */
+.setup-banner{background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:var(--rl);padding:16px 20px;margin-bottom:20px;display:flex;align-items:flex-start;gap:12px;}
+.setup-banner-icon{font-size:20px;flex-shrink:0;}
+.setup-banner-title{font-size:13px;font-weight:700;color:#92400E;margin-bottom:4px;}
+.setup-banner-text{font-size:12px;color:#78350F;line-height:1.5;}
+.setup-url{font-family:monospace;font-size:11px;background:#FDE68A;padding:2px 6px;border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="cmyk-dots">
+        <div class="cmyk-dot" style="background:#00B4D8"></div>
+        <div class="cmyk-dot" style="background:#E5007E"></div>
+        <div class="cmyk-dot" style="background:#FFD100"></div>
+        <div class="cmyk-dot" style="background:#555"></div>
+      </div>
+      <div>
+        <div class="brand-text">Plate Loss Tracker</div>
+        <div class="brand-sub">Offset Print — Plate Making</div>
+      </div>
+    </div>
+    <div class="topbar-nav">
+      <button class="tnav active" onclick="goTab('dashboard',this)">Dashboard</button>
+      <button class="tnav" onclick="goTab('log',this)">Log Entry</button>
+      <button class="tnav" onclick="goTab('history',this)">History</button>
+      <button class="tnav" onclick="goTab('shifts',this)">Shifts</button>
+      <button class="tnav" onclick="goTab('issues',this)">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="2" y="7" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 7V5a3.5 3.5 0 017 0v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Issue Types
+      </button>
+      <button class="tnav" onclick="goTab('admin',this)">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="2" y="7" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 7V5a3.5 3.5 0 017 0v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Admin
+      </button>
+    </div>
+    <div class="topbar-right">
+      <div class="conn-dot loading" id="conn-dot" title="Connecting..."></div>
+      <div class="topbar-version">v0.1.6 ALPHA</div>
+    </div>
+  </div>
+
+  <div class="pages">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div id="setup-banner" class="setup-banner" style="display:none;">
+        <div class="setup-banner-icon">⚠</div>
+        <div>
+          <div class="setup-banner-title">Google Sheets not connected</div>
+          <div class="setup-banner-text">Open this file in a text editor, find <span class="setup-url">https://script.google.com/macros/s/AKfycbyc707YUd9GJIQciLZu64dllCOtOoZsL_vIFbIbmrjd1MTn8SRKaSQnn9eSnFGMN5RL/exec</span> near the top, and replace it with your Google Apps Script web app URL. See the setup guide (README.md) for step-by-step instructions.</div>
+        </div>
+      </div>
+      <div class="page-title">Dashboard</div>
+      <div class="stat-row" id="dash-stats">
+        <div class="stat"><div class="stat-accent" style="background:#00B4D8"></div><div class="stat-lbl">Total plates lost</div><div class="stat-val" id="m-total">—</div></div>
+        <div class="stat"><div class="stat-accent" style="background:#E5007E"></div><div class="stat-lbl">Incidents logged</div><div class="stat-val" id="m-incidents">—</div></div>
+        <div class="stat"><div class="stat-accent" style="background:#FFD100"></div><div class="stat-lbl">Top issue</div><div class="stat-val sm" id="m-top">—</div></div>
+        <div class="stat"><div class="stat-accent" style="background:#555"></div><div class="stat-lbl">Highest shift</div><div class="stat-val sm" id="m-shift">—</div></div>
+      </div>
+      <div class="two-col">
+        <div class="card"><div class="card-hdr"><div class="card-hdr-bar" style="background:#00B4D8"></div><div class="card-title">Loss by issue type</div></div><div class="bar-list" id="chart-issue"><div class="no-data">Loading...</div></div></div>
+        <div class="card"><div class="card-hdr"><div class="card-hdr-bar" style="background:#E5007E"></div><div class="card-title">Loss by shift</div></div><div class="bar-list" id="chart-shift"><div class="no-data">Loading...</div></div></div>
+      </div>
+    </div>
+
+    <!-- LOG ENTRY -->
+    <div class="page" id="page-log">
+      <div class="page-title">Log a plate loss</div>
+      <div class="form-wrap">
+        <div class="form-grid">
+          <div class="fg"><label>Shift / Employee</label>
+            <select id="f-shift">
+              <option value="">Select shift...</option>
+              <option value="1st|Jared Jones">1st shift — Jared Jones</option>
+              <option value="2nd|Westyn Osburn">2nd shift — Westyn Osburn</option>
+              <option value="3rd|Jodie Mahaffey">3rd shift — Jodie Mahaffey</option>
+            </select>
+          </div>
+          <div class="fg"><label>Issue type</label><select id="f-issue"><option value="">Select issue...</option></select></div>
+          <div class="fg"><label>Plates lost</label><input type="number" id="f-qty" min="1" value="1"></div>
+          <div class="fg"><label>Date</label><input type="date" id="f-date"></div>
+        </div>
+        <div class="form-sep"></div>
+        <div class="fg"><label>Notes <span class="opt">— optional</span></label><textarea id="f-note" placeholder="Any additional details about this loss..."></textarea></div>
+        <div style="display:flex;align-items:center;gap:16px;margin-top:20px;">
+          <button class="btn-save" id="btn-submit" onclick="submitLog()">Save entry</button>
+          <span class="feedback" id="fb"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="page" id="page-history">
+      <div class="page-title">History</div>
+      <div class="log-filters">
+        <select id="fil-shift" onchange="renderHistory()"><option value="">All shifts</option><option value="1st">1st shift</option><option value="2nd">2nd shift</option><option value="3rd">3rd shift</option></select>
+        <select id="fil-issue" onchange="renderHistory()"><option value="">All issues</option></select>
+        <input type="date" id="fil-from" onchange="renderHistory()" title="From date">
+        <input type="date" id="fil-to" onchange="renderHistory()" title="To date">
+        <button class="btn-ghost" onclick="clearFilters()">Clear filters</button>
+      </div>
+      <div class="log-summary" id="log-summary"></div>
+      <div class="log-list" id="log-list"><div class="no-data">Loading...</div></div>
+    </div>
+
+    <!-- SHIFTS -->
+    <div class="page" id="page-shifts">
+      <div class="page-title">Shifts</div>
+      <div class="shift-grid" id="shift-grid"></div>
+      <div class="two-col">
+        <div class="card"><div class="card-hdr"><div class="card-hdr-bar" style="background:#E5007E"></div><div class="card-title">Plates lost per shift</div></div><div class="bar-list" id="shift-bars"><div class="no-data">No data yet</div></div></div>
+        <div class="card"><div class="card-hdr"><div class="card-hdr-bar" style="background:#FFD100"></div><div class="card-title">Incidents per shift</div></div><div class="bar-list" id="shift-inc-bars"><div class="no-data">No data yet</div></div></div>
+      </div>
+    </div>
+
+    <!-- ISSUE TYPES -->
+    <div class="page" id="page-issues">
+      <div class="pin-overlay" id="issues-pin-screen">
+        <div class="pin-box">
+          <div class="pin-lock"><svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="2" y="7" width="12" height="9" rx="1.5" stroke="white" stroke-width="1.5"/><path d="M4.5 7V5a3.5 3.5 0 017 0v2" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+          <div class="pin-title">Issue Types</div>
+          <div class="pin-sub">Enter your admin PIN to continue</div>
+          <input class="pin-input" type="password" id="issues-pin-input" maxlength="8" placeholder="••••" onkeydown="if(event.key==='Enter')checkIssuesPin()">
+          <button class="pin-btn" onclick="checkIssuesPin()">Unlock</button>
+          <div class="pin-error" id="issues-pin-error"></div>
+        </div>
+      </div>
+      <div id="issues-content" style="display:none;">
+        <div class="page-title">Issue types</div>
+        <div class="form-wrap" style="margin-bottom:16px;padding:16px 20px;">
+          <div class="add-issue-row">
+            <input type="text" id="new-issue" placeholder="Type a new issue name...">
+            <button class="btn-save" onclick="addIssue()">Add issue</button>
+          </div>
+        </div>
+        <div class="issue-grid" id="issue-grid"></div>
+      </div>
+    </div>
+
+    <!-- ADMIN -->
+    <div class="page" id="page-admin">
+      <div class="pin-overlay" id="admin-pin-screen">
+        <div class="pin-box">
+          <div class="pin-lock"><svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="2" y="7" width="12" height="9" rx="1.5" stroke="white" stroke-width="1.5"/><path d="M4.5 7V5a3.5 3.5 0 017 0v2" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+          <div class="pin-title">Admin panel</div>
+          <div class="pin-sub">Lead PIN required</div>
+          <input class="pin-input" type="password" id="admin-pin-input" maxlength="8" placeholder="••••" onkeydown="if(event.key==='Enter')checkAdminPin()">
+          <button class="pin-btn" onclick="checkAdminPin()">Unlock</button>
+          <div class="pin-error" id="admin-pin-error"></div>
+        </div>
+      </div>
+      <div id="admin-content" style="display:none;">
+        <div class="page-title">Admin panel</div>
+        <div class="admin-section">
+          <div class="admin-section-title">PIN management</div>
+          <div id="admin-card-lead" class="pin-user-card"></div>
+          <div id="admin-card-mgr" class="pin-user-card"></div>
+          <div class="admin-feedback" id="admin-fb"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ================================================================
+//  CONFIGURATION — Replace with your Google Apps Script URL
+// ================================================================
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyc707YUd9GJIQciLZu64dllCOtOoZsL_vIFbIbmrjd1MTn8SRKaSQnn9eSnFGMN5RL/exec';
+// ================================================================
+
+const SHIFTS = [
+  {key:'1st',name:'Jared Jones',role:'1st shift',bar:'#00B4D8',bg:'#E0F7FC',tc:'#006A80',avatar:'#00B4D8',atc:'#fff'},
+  {key:'2nd',name:'Westyn Osburn',role:'2nd shift',bar:'#E5007E',bg:'#FCE4F0',tc:'#8B004C',avatar:'#E5007E',atc:'#fff'},
+  {key:'3rd',name:'Jodie Mahaffey',role:'3rd shift',bar:'#FFD100',bg:'#FFF8DC',tc:'#7A5F00',avatar:'#FFD100',atc:'#0D1B2A'},
+];
+const ISSUE_BARS = ['#00B4D8','#E5007E','#FFD100','#0077B6','#C77DFF','#06D6A0','#F4A261','#EF233C','#4CC9F0','#7209B7'];
+
+let appData = { log: [], issues: [], pins: { lead: '1234', manager: '' } };
+let connected = false;
+
+// ---- API ----
+function apiCall(params) {
+  return new Promise((resolve, reject) => {
+    const cbName = 'cb_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => {
+      delete window[cbName];
+      if(document.body.contains(script)) document.body.removeChild(script);
+      reject(new Error('Request timed out'));
+    }, 15000);
+    window[cbName] = function(data) {
+      clearTimeout(timeout);
+      delete window[cbName];
+      if(document.body.contains(script)) document.body.removeChild(script);
+      resolve(data);
+    };
+    params.callback = cbName;
+    const url = SCRIPT_URL + '?' + Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+    script.src = url;
+    script.onerror = () => { clearTimeout(timeout); delete window[cbName]; if(document.body.contains(script)) document.body.removeChild(script); reject(new Error('Script load error')); };
+    document.body.appendChild(script);
+  });
+}
+
+function setConn(state) {
+  const dot = document.getElementById('conn-dot');
+  dot.className = 'conn-dot ' + state;
+  dot.title = state === 'online' ? 'Connected to Google Sheets' : state === 'offline' ? 'Cannot reach Google Sheets' : 'Connecting...';
+  connected = state === 'online';
+}
+
+async function loadAll() {
+  if (SCRIPT_URL === 'YOUR_SCRIPT_URL_HERE') {
+    document.getElementById('setup-banner').style.display = 'flex';
+    setConn('offline');
+    return;
+  }
+  setConn('loading');
+  try {
+    const data = await apiCall({ action: 'getAll' });
+    if (data.error) throw new Error(data.error);
+    appData = data;
+    setConn('online');
+    renderDash();
+    renderIssueSelect();
+    renderHistory();
+    renderShifts();
+  } catch(e) {
+    setConn('offline');
+    document.getElementById('setup-banner').style.display = 'flex';
+    console.error(e);
+  }
+}
+
+// ---- Helpers ----
+function initials(n) { return n.split(' ').map(p => p[0]).join(''); }
+function todayStr() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function fmtDate(s) { if(!s) return '—'; const [y,m,d] = s.split('-'); return m+'/'+d+'/'+y; }
+function shiftFor(k) { return SHIFTS.find(s => s.key === k) || SHIFTS[0]; }
+function issueColor(i) { return ISSUE_BARS[i % ISSUE_BARS.length]; }
+function showFb(id, msg, isErr, dur=2500) { const el=document.getElementById(id); el.textContent=msg; el.className='feedback'+(isErr?' err':''); setTimeout(()=>el.textContent='', dur); }
+
+// ---- Tab nav ----
+function goTab(name, btn) {
+  document.querySelectorAll('.tnav').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'dashboard') renderDash();
+  if (name === 'history')   renderHistory();
+  if (name === 'shifts')    renderShifts();
+  if (name === 'log')       renderIssueSelect();
+  if (name === 'issues') {
+    document.getElementById('issues-pin-screen').style.display = 'flex';
+    document.getElementById('issues-content').style.display = 'none';
+    document.getElementById('issues-pin-input').value = '';
+    document.getElementById('issues-pin-error').textContent = '';
+    setTimeout(() => document.getElementById('issues-pin-input').focus(), 100);
+  }
+  if (name === 'admin') {
+    document.getElementById('admin-pin-screen').style.display = 'flex';
+    document.getElementById('admin-content').style.display = 'none';
+    document.getElementById('admin-pin-input').value = '';
+    document.getElementById('admin-pin-error').textContent = '';
+    setTimeout(() => document.getElementById('admin-pin-input').focus(), 100);
+  }
+}
+
+// ---- PIN ----
+function checkIssuesPin() {
+  const entered = document.getElementById('issues-pin-input').value.trim();
+  const valid = (entered === appData.pins.lead) || (appData.pins.manager && entered === appData.pins.manager);
+  if (valid) {
+    document.getElementById('issues-pin-screen').style.display = 'none';
+    document.getElementById('issues-content').style.display = 'block';
+    renderIssues();
+  } else {
+    document.getElementById('issues-pin-error').textContent = 'Incorrect PIN. Try again.';
+    document.getElementById('issues-pin-input').value = '';
+    document.getElementById('issues-pin-input').focus();
+    setTimeout(() => document.getElementById('issues-pin-error').textContent = '', 3000);
+  }
+}
+
+function checkAdminPin() {
+  const entered = document.getElementById('admin-pin-input').value.trim();
+  if (entered === appData.pins.lead) {
+    document.getElementById('admin-pin-screen').style.display = 'none';
+    document.getElementById('admin-content').style.display = 'block';
+    renderAdminPanel();
+  } else {
+    document.getElementById('admin-pin-error').textContent = 'Incorrect PIN. Only the Lead PIN unlocks Admin.';
+    document.getElementById('admin-pin-input').value = '';
+    document.getElementById('admin-pin-input').focus();
+    setTimeout(() => document.getElementById('admin-pin-error').textContent = '', 3500);
+  }
+}
+
+// ---- Admin ----
+function renderAdminPanel() {
+  const lc = document.getElementById('admin-card-lead');
+  lc.innerHTML = `<div class="pin-user-header"><div><div class="pin-user-name">Lead (you)</div><div class="pin-user-role">Full access — Issue Types &amp; Admin</div></div><span class="pin-status pin-set">PIN set</span></div><div class="pin-change-row"><input type="password" id="lead-new-pin" maxlength="8" placeholder="New PIN..." onkeydown="if(event.key==='Enter')savePinLead()"><button class="btn-set-pin" onclick="savePinLead()">Update PIN</button></div>`;
+  const mgrSet = !!appData.pins.manager;
+  const mc = document.getElementById('admin-card-mgr');
+  mc.innerHTML = `<div class="pin-user-header"><div><div class="pin-user-name">Manager</div><div class="pin-user-role">Access to Issue Types only</div></div><span class="pin-status ${mgrSet?'pin-set':'pin-unset'}">${mgrSet?'PIN set':'Not set yet'}</span></div><div class="pin-change-row"><input type="password" id="mgr-new-pin" maxlength="8" placeholder="${mgrSet?'Change PIN...':'Set manager PIN...'}" onkeydown="if(event.key==='Enter')savePinMgr()"><button class="btn-set-pin" onclick="savePinMgr()">${mgrSet?'Update':'Set PIN'}</button>${mgrSet?`<button class="btn-clear-pin" onclick="clearMgrPin()">Clear</button>`:''}</div>`;
+}
+
+async function savePinLead() {
+  const val = document.getElementById('lead-new-pin').value.trim();
+  if (!val || val.length < 4) { showFb('admin-fb','PIN must be at least 4 characters.',true); return; }
+  appData.pins.lead = val;
+  await apiCall({ action: 'savePins', data: JSON.stringify(appData.pins) });
+  renderAdminPanel();
+  showFb('admin-fb','Lead PIN updated.');
+}
+async function savePinMgr() {
+  const val = document.getElementById('mgr-new-pin').value.trim();
+  if (!val || val.length < 4) { showFb('admin-fb','PIN must be at least 4 characters.',true); return; }
+  appData.pins.manager = val;
+  await apiCall({ action: 'savePins', data: JSON.stringify(appData.pins) });
+  renderAdminPanel();
+  showFb('admin-fb','Manager PIN set.');
+}
+async function clearMgrPin() {
+  if (!confirm('Remove the manager PIN?')) return;
+  appData.pins.manager = '';
+  await apiCall({ action: 'savePins', data: JSON.stringify(appData.pins) });
+  renderAdminPanel();
+  showFb('admin-fb','Manager PIN cleared.');
+}
+
+// ---- Dashboard ----
+function getTotals() {
+  const byIssue = {}; const byShift = {}; const byShiftInc = {};
+  SHIFTS.forEach(s => { byShift[s.key] = 0; byShiftInc[s.key] = 0; });
+  appData.issues.forEach(i => byIssue[i] = 0);
+  let total = 0;
+  appData.log.forEach(e => {
+    if (byIssue[e.issue] !== undefined) byIssue[e.issue] += e.qty; else byIssue[e.issue] = e.qty;
+    if (byShift[e.shift] !== undefined) { byShift[e.shift] += e.qty; byShiftInc[e.shift]++; }
+    total += e.qty;
+  });
+  return { byIssue, byShift, byShiftInc, total, incidents: appData.log.length };
+}
+
+function renderDash() {
+  const { byIssue, byShift, total, incidents } = getTotals();
+  const top = Object.entries(byIssue).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1])[0];
+  const topS = Object.entries(byShift).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1])[0];
+  const ts = topS ? shiftFor(topS[0]) : null;
+  document.getElementById('m-total').textContent = total;
+  document.getElementById('m-incidents').textContent = incidents;
+  document.getElementById('m-top').textContent = top ? top[0] : '—';
+  document.getElementById('m-shift').textContent = ts ? ts.name : '—';
+  const ie = document.getElementById('chart-issue');
+  const ia = appData.issues.map((iss,i) => ({iss,i,val:byIssue[iss]||0})).filter(x => x.val > 0).sort((a,b) => b.val-a.val);
+  const mxI = Math.max(...ia.map(x => x.val), 1);
+  if (!ia.length) { ie.innerHTML = '<div class="no-data">No data yet</div>'; }
+  else { ie.innerHTML = ''; ia.forEach(({iss,i,val}) => { const p=Math.round(val/mxI*100); ie.innerHTML += `<div class="bar-item"><div class="bar-row-lbl"><span>${iss}</span><span class="bar-count">${val}</span></div><div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${issueColor(i)}"></div></div></div>`; }); }
+  const se = document.getElementById('chart-shift');
+  const mxS = Math.max(...Object.values(byShift), 1);
+  if (!Object.values(byShift).some(v => v > 0)) { se.innerHTML = '<div class="no-data">No data yet</div>'; }
+  else { se.innerHTML = ''; SHIFTS.forEach(s => { const v=byShift[s.key]; const p=Math.round(v/mxS*100); se.innerHTML += `<div class="bar-item"><div class="bar-row-lbl"><span>${s.name} <span style="color:var(--text-3)">(${s.role})</span></span><span class="bar-count">${v}</span></div><div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.bar}"></div></div></div>`; }); }
+}
+
+// ---- Log entry ----
+function renderIssueSelect() {
+  const sel = document.getElementById('f-issue');
+  sel.innerHTML = '<option value="">Select issue...</option>';
+  appData.issues.forEach(iss => { const o = document.createElement('option'); o.value = iss; o.textContent = iss; sel.appendChild(o); });
+  const fsel = document.getElementById('fil-issue');
+  const cur = fsel.value;
+  fsel.innerHTML = '<option value="">All issues</option>';
+  appData.issues.forEach(iss => { const o = document.createElement('option'); o.value = iss; o.textContent = iss; fsel.appendChild(o); });
+  fsel.value = cur;
+}
+
+async function submitLog() {
+  const sr = document.getElementById('f-shift').value;
+  const issue = document.getElementById('f-issue').value;
+  const qty = parseInt(document.getElementById('f-qty').value) || 1;
+  const date = document.getElementById('f-date').value || todayStr();
+  const note = document.getElementById('f-note').value.trim();
+  if (!sr || !issue) { showFb('fb','Please select a shift and issue.',true); return; }
+  const [shift, employee] = sr.split('|');
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const entry = { shift, employee, issue, qty, date, note };
+    const res = await apiCall({ action: 'addLog', data: JSON.stringify(entry) });
+    if (res.error) throw new Error(res.error);
+    entry.id = res.id;
+    appData.log.unshift(entry);
+    document.getElementById('f-note').value = '';
+    document.getElementById('f-qty').value = 1;
+    document.getElementById('f-shift').value = '';
+    document.getElementById('f-issue').value = '';
+    showFb('fb', 'Entry saved!');
+    renderDash();
+  } catch(e) {
+    showFb('fb', 'Error saving. Check connection.', true);
+  }
+  btn.disabled = false; btn.textContent = 'Save entry';
+}
+
+// ---- History ----
+function renderHistory() {
+  const fs = document.getElementById('fil-shift').value;
+  const fi = document.getElementById('fil-issue').value;
+  const ff = document.getElementById('fil-from').value;
+  const ft = document.getElementById('fil-to').value;
+  let filtered = [...appData.log].filter(e => {
+    if (fs && e.shift !== fs) return false;
+    if (fi && e.issue !== fi) return false;
+    if (ff && e.date < ff) return false;
+    if (ft && e.date > ft) return false;
+    return true;
+  });
+  const tq = filtered.reduce((a,e) => a + e.qty, 0);
+  document.getElementById('log-summary').textContent = `${filtered.length} ${filtered.length===1?'entry':'entries'} — ${tq} plates lost`;
+  const el = document.getElementById('log-list');
+  if (!filtered.length) { el.innerHTML = '<div class="no-data" style="background:#fff;border-radius:12px;border:1px solid var(--border);padding:32px;">No entries match your filters</div>'; return; }
+  el.innerHTML = '';
+  filtered.forEach(e => {
+    const s = shiftFor(e.shift); const idx = appData.issues.indexOf(e.issue); const ic = issueColor(idx >= 0 ? idx : 0);
+    const card = document.createElement('div'); card.className = 'log-card';
+    card.innerHTML = `<div class="log-card-top"><div class="log-card-top-left"><span class="lc-shift" style="background:${s.bg};color:${s.tc};">${e.shift} shift</span><span class="lc-emp">${e.employee}</span></div><div style="display:flex;align-items:center;gap:10px;"><span class="lc-date">${fmtDate(e.date)}</span><button class="log-card-del" onclick="deleteLogEntry('${e.id}',this)" title="Delete entry">×</button></div></div><div class="log-card-body"><div class="lc-field"><div class="lc-label">Issue</div><span class="lc-issue-pill" style="background:${ic}22;color:${ic};border:1px solid ${ic}44;">${e.issue}</span></div><div class="lc-field"><div class="lc-label">Plates lost</div><div class="lc-qty" style="color:${s.bar}">${e.qty}</div></div><div class="lc-field"><div class="lc-label">Logged</div><div class="lc-val">${fmtDate(e.date)}</div></div></div>${e.note?`<div class="log-card-note">${e.note}</div>`:''}`;
+    el.appendChild(card);
+  });
+}
+
+async function deleteLogEntry(id, btn) {
+  if (!confirm('Delete this entry?')) return;
+  btn.textContent = '...'; btn.disabled = true;
+  await apiCall({ action: 'deleteLog', id });
+  appData.log = appData.log.filter(e => e.id != id);
+  renderHistory(); renderDash();
+}
+
+function clearFilters() {
+  ['fil-shift','fil-issue','fil-from','fil-to'].forEach(id => document.getElementById(id).value = '');
+  renderHistory();
+}
+
+// ---- Shifts ----
+function renderShifts() {
+  const { byShift, byShiftInc } = getTotals();
+  const sg = document.getElementById('shift-grid'); sg.innerHTML = '';
+  SHIFTS.forEach(s => {
+    const card = document.createElement('div'); card.className = 'shift-card';
+    card.innerHTML = `<div class="shift-card-accent" style="background:${s.bar}"></div><div style="display:flex;align-items:center;margin-left:8px;"><div class="shift-avatar" style="background:${s.avatar};color:${s.atc};">${initials(s.name)}</div><div><div class="shift-name">${s.name}</div><div class="shift-role">${s.role}</div></div></div><div class="shift-stats"><div class="sstat"><div class="sstat-n" style="color:${s.bar}">${byShift[s.key]}</div><div class="sstat-l">plates lost</div></div><div class="sstat"><div class="sstat-n" style="color:${s.bar}">${byShiftInc[s.key]}</div><div class="sstat-l">incidents</div></div></div>`;
+    sg.appendChild(card);
+  });
+  const mxP = Math.max(...SHIFTS.map(s => byShift[s.key]), 1);
+  const mxI = Math.max(...SHIFTS.map(s => byShiftInc[s.key]), 1);
+  const pb = document.getElementById('shift-bars'); const ib = document.getElementById('shift-inc-bars');
+  if (!SHIFTS.some(s => byShift[s.key] > 0)) { pb.innerHTML = '<div class="no-data">No data yet</div>'; }
+  else { pb.innerHTML = ''; SHIFTS.forEach(s => { const v=byShift[s.key]; const p=Math.round(v/mxP*100); pb.innerHTML += `<div class="bar-item"><div class="bar-row-lbl"><span>${s.name}</span><span class="bar-count">${v}</span></div><div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.bar}"></div></div></div>`; }); }
+  if (!SHIFTS.some(s => byShiftInc[s.key] > 0)) { ib.innerHTML = '<div class="no-data">No data yet</div>'; }
+  else { ib.innerHTML = ''; SHIFTS.forEach(s => { const v=byShiftInc[s.key]; const p=Math.round(v/mxI*100); ib.innerHTML += `<div class="bar-item"><div class="bar-row-lbl"><span>${s.name}</span><span class="bar-count">${v}</span></div><div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.bar}"></div></div></div>`; }); }
+}
+
+// ---- Issues ----
+function renderIssues() {
+  const el = document.getElementById('issue-grid'); el.innerHTML = '';
+  appData.issues.forEach((iss, i) => {
+    const col = issueColor(i); const row = document.createElement('div'); row.className = 'issue-row';
+    row.innerHTML = `<div class="issue-row-left"><div class="issue-swatch" style="background:${col}"></div><div class="issue-name">${iss}</div></div><button class="btn-del" onclick="removeIssue('${iss}')">Remove</button>`;
+    el.appendChild(row);
+  });
+}
+
+async function addIssue() {
+  const inp = document.getElementById('new-issue'); const val = inp.value.trim();
+  if (!val || appData.issues.includes(val)) return;
+  await apiCall({ action: 'addIssue', name: val });
+  appData.issues.push(val); inp.value = '';
+  renderIssues(); renderIssueSelect();
+}
+
+async function removeIssue(name) {
+  if (!confirm(`Remove "${name}"?`)) return;
+  await apiCall({ action: 'removeIssue', name });
+  appData.issues = appData.issues.filter(i => i !== name);
+  renderIssues(); renderIssueSelect();
+}
+
+// ---- Init ----
+document.getElementById('f-date').value = todayStr();
+document.getElementById('new-issue').addEventListener('keydown', e => { if (e.key === 'Enter') addIssue(); });
+loadAll();
+</script>
+</body>
+</html>
